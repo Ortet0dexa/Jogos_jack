@@ -1,5 +1,4 @@
 using UnityEngine;
-using UnityEngine.SceneManagement;
 
 [RequireComponent(typeof(Rigidbody))]
 [RequireComponent(typeof(Animator))]
@@ -17,10 +16,9 @@ public class Player : MonoBehaviour
     private Rigidbody rb;
     private Animator animator;
 
-    private int currentLane = 1; // 0 = esquerda | 1 = meio | 2 = direita
-    private bool isGrounded = false;
-    private bool isDead = false;
-    private bool canDie = false;
+    private int currentLane = 1; // 0 esquerda | 1 meio | 2 direita
+    private bool isGrounded;
+    private bool isDead;
 
     // ================= START =================
     void Start()
@@ -28,51 +26,23 @@ public class Player : MonoBehaviour
         rb = GetComponent<Rigidbody>();
         animator = GetComponent<Animator>();
 
-        // ================= RIGIDBODY CONFIG =================
         rb.freezeRotation = true;
-        rb.useGravity = true;
-        rb.isKinematic = false;
         rb.collisionDetectionMode = CollisionDetectionMode.Continuous;
         rb.interpolation = RigidbodyInterpolation.Interpolate;
+        rb.useGravity = true;
 
-        // ================= POSIÇÃO SEGURA =================
-        Vector3 pos = transform.position;
-        pos.y = 1.1f; // garante que começa acima do chão
-        transform.position = pos;
+       // Define a gravidade GLOBAL apenas uma vez
+       Physics.gravity = new Vector3(0, -9.81f * gravityMultiplier, 0);
 
-        // ================= GRAVIDADE =================
-        Physics.gravity *= gravityMultiplier;
-
-        // ================= ANIMAÇÃO =================
         animator.SetBool("isRunning", true);
         animator.SetBool("isGrounded", false);
-
-        // Evita morte nos primeiros frames
-        Invoke(nameof(EnableDeath), 0.5f);
-    }
-
-    void EnableDeath()
-    {
-        canDie = true;
     }
 
     // ================= UPDATE =================
     void Update()
     {
         if (isDead) return;
-        HandleInput();
-    }
 
-    // ================= FIXED UPDATE =================
-    void FixedUpdate()
-    {
-        if (isDead) return;
-        MoveLanes();
-    }
-
-    // ================= INPUT =================
-    void HandleInput()
-    {
         if (Input.GetKeyDown(KeyCode.A))
             ChangeLane(-1);
 
@@ -81,45 +51,70 @@ public class Player : MonoBehaviour
 
         if (Input.GetKeyDown(KeyCode.Space) && isGrounded)
             Jump();
+
+        if (Input.GetKeyDown(KeyCode.S) && isGrounded)
+            Slide();
     }
 
-    // ================= MOVIMENTO LATERAL =================
+    // ================= FIXED =================
+    void FixedUpdate()
+    {
+        if (isDead) return;
+        MoveLanes();
+    }
+
+    // ================= MOVIMENTO =================
     void MoveLanes()
     {
-        Vector3 targetPosition = transform.position;
-        targetPosition.x = (currentLane - 1) * laneDistance;
+        Vector3 target = transform.position;
+        target.x = (currentLane - 1) * laneDistance;
 
         transform.position = Vector3.Lerp(
             transform.position,
-            new Vector3(targetPosition.x, transform.position.y, transform.position.z),
+            new Vector3(target.x, transform.position.y, transform.position.z),
             Time.fixedDeltaTime * laneChangeSpeed
         );
     }
 
-    void ChangeLane(int direction)
+    void ChangeLane(int dir)
     {
-        currentLane = Mathf.Clamp(currentLane + direction, 0, 2);
+        currentLane = Mathf.Clamp(currentLane + dir, 0, 2);
     }
 
     // ================= PULO =================
     void Jump()
     {
         rb.linearVelocity = new Vector3(rb.linearVelocity.x, jumpForce, rb.linearVelocity.z);
-
         isGrounded = false;
+
         animator.SetTrigger("jump");
         animator.SetBool("isGrounded", false);
     }
 
-    // ================= COLISÕES =================
-    void OnCollisionEnter(Collision collision)
-{
-    if (collision.gameObject.CompareTag("GroundCity"))
+    // ================= SLIDE =================
+    void Slide()
     {
-        isGrounded = true;
-        animator.SetBool("isGrounded", true);
+        animator.SetTrigger("slide");
     }
-}
+
+    // ================= CHÃO =================
+    void OnCollisionEnter(Collision collision)
+    {
+        if (isDead) return;
+
+        // Detecta chão
+        if (collision.gameObject.CompareTag("GroundCity"))
+        {
+            isGrounded = true;
+            animator.SetBool("isGrounded", true);
+        }
+
+        // Detecta obstáculos
+        if (collision.gameObject.CompareTag("Obstacle"))
+        {
+            Die();
+        }
+    }
 
     // ================= MORTE =================
     void Die()
@@ -131,17 +126,20 @@ public class Player : MonoBehaviour
         rb.linearVelocity = Vector3.zero;
         rb.isKinematic = true;
 
-        // Animações
+        // Animação
         animator.SetBool("isRunning", false);
         animator.SetTrigger("Die");
 
-        // Reinicia a cena após 2 segundos
-        Invoke(nameof(RestartGame), 2f);
+        // Chama Game Over
+        if (GameManager.instance != null)
+            GameManager.instance.GameOver();
     }
 
-    // ================= RESTART =================
-    void RestartGame()
+    // ================= FUNÇÃO PARA REINICIAR JOGO =================
+    public void Restart()
     {
-        SceneManager.LoadScene(SceneManager.GetActiveScene().name);
+        UnityEngine.SceneManagement.SceneManager.LoadScene(
+            UnityEngine.SceneManagement.SceneManager.GetActiveScene().name
+        );
     }
 }
