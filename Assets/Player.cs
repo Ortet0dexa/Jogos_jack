@@ -6,12 +6,17 @@ using UnityEngine;
 public class Player : MonoBehaviour
 {
     [Header("Movement")]
-    public float laneDistance = 3f;        // Distância entre faixas
-    public float laneChangeSpeed = 10f;    // Suavidade da troca de faixa
+    public float laneDistance = 3f;
+    public float laneChangeSpeed = 10f;
     public float jumpForce = 6f;
 
     [Header("Gravity")]
     public float gravityMultiplier = 2f;
+
+    [Header("Audio")]
+    public AudioSource runAudioSource;
+    public AudioSource jumpAudioSource;
+    public AudioSource slideAudioSource;
 
     private Rigidbody rb;
     private Animator animator;
@@ -31,8 +36,8 @@ public class Player : MonoBehaviour
         rb.interpolation = RigidbodyInterpolation.Interpolate;
         rb.useGravity = true;
 
-       // Define a gravidade GLOBAL apenas uma vez
-       Physics.gravity = new Vector3(0, -9.81f * gravityMultiplier, 0);
+        // Gravidade global
+        Physics.gravity = new Vector3(0, -9.81f * gravityMultiplier, 0);
 
         animator.SetBool("isRunning", true);
         animator.SetBool("isGrounded", false);
@@ -54,6 +59,8 @@ public class Player : MonoBehaviour
 
         if (Input.GetKeyDown(KeyCode.S) && isGrounded)
             Slide();
+
+        HandleRunAudio();
     }
 
     // ================= FIXED =================
@@ -89,12 +96,35 @@ public class Player : MonoBehaviour
 
         animator.SetTrigger("jump");
         animator.SetBool("isGrounded", false);
+
+        // Som de pulo
+        if (jumpAudioSource != null)
+            jumpAudioSource.Play();
     }
 
     // ================= SLIDE =================
     void Slide()
     {
         animator.SetTrigger("slide");
+
+        // Som de slide
+        if (slideAudioSource != null)
+            slideAudioSource.Play();
+    }
+
+    // ================= ÁUDIO DE CORRIDA =================
+    void HandleRunAudio()
+    {
+        if (isGrounded && !isDead)
+        {
+            if (runAudioSource != null && !runAudioSource.isPlaying)
+                runAudioSource.Play();
+        }
+        else
+        {
+            if (runAudioSource != null && runAudioSource.isPlaying)
+                runAudioSource.Stop();
+        }
     }
 
     // ================= CHÃO =================
@@ -102,14 +132,12 @@ public class Player : MonoBehaviour
     {
         if (isDead) return;
 
-        // Detecta chão
         if (collision.gameObject.CompareTag("GroundCity"))
         {
             isGrounded = true;
             animator.SetBool("isGrounded", true);
         }
 
-        // Detecta obstáculos
         if (collision.gameObject.CompareTag("Obstacle"))
         {
             Die();
@@ -122,20 +150,21 @@ public class Player : MonoBehaviour
         if (isDead) return;
         isDead = true;
 
-        // Para física
         rb.linearVelocity = Vector3.zero;
         rb.isKinematic = true;
 
-        // Animação
         animator.SetBool("isRunning", false);
         animator.SetTrigger("Die");
 
-        // Chama Game Over
+        // Para sons
+        if (runAudioSource != null)
+            runAudioSource.Stop();
+
         if (GameManager.instance != null)
             GameManager.instance.GameOver();
     }
 
-    // ================= FUNÇÃO PARA REINICIAR JOGO =================
+    // ================= RESTART =================
     public void Restart()
     {
         UnityEngine.SceneManagement.SceneManager.LoadScene(
